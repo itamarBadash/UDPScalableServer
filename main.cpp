@@ -1,6 +1,8 @@
 #include <iostream>
-
+#include "UDPServer.h"
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    UDPServer server(8080, 4);
+
+    server.start();
     return 0;
 }
