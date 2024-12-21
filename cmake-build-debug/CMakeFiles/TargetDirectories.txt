@@ -1,0 +1,3 @@
+C:/Users/Badash/CLionProjects/UDPScalableServer/cmake-build-debug/CMakeFiles/UDPScalableServer.dir
+C:/Users/Badash/CLionProjects/UDPScalableServer/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/Badash/CLionProjects/UDPScalableServer/cmake-build-debug/CMakeFiles/rebuild_cache.dir
