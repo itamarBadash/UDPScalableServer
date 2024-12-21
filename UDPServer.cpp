@@ -130,7 +130,7 @@ void UDPServer::processCommand() {
                         std::cerr << "Error parsing parameter: " << e.what() << std::endl;
                     }
                 }
-                std::cout << "Received command: " << command << "Parameters: " << params_str << std::endl;
+                std::cout << "Received command: " << command << " Parameters: " << params_str << std::endl;
                 lock.lock();
             }
         }
