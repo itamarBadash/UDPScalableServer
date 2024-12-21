@@ -16,7 +16,6 @@ public:
 
 private:
     void workerThreadFunction(int socket);
-    void processCommand(const std::string& message, sockaddr_in clientAddr);
 
     int port;
     int numSockets;
@@ -27,4 +26,7 @@ private:
     std::mutex queueMutex;
     std::queue<std::pair<std::string, sockaddr_in>> commandQueue;
     std::condition_variable queueCondition;
+    std::thread commandProcessorThread;
+
+    void processCommand();
 };

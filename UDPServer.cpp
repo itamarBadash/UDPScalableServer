@@ -43,7 +43,7 @@ bool UDPServer::start() {
         serverSockets.push_back(socketFd);
         threads.emplace_back(&UDPServer::workerThreadFunction, this, socketFd);
     }
-
+    commandProcessorThread = std::thread(&UDPServer::processCommand, this);
     std::cout << "UDP Server started with " << numSockets << " sockets on port " << port << std::endl;
     return true;
 }
@@ -59,6 +59,9 @@ void UDPServer::stop() {
 
         for (int socketFd : serverSockets) {
             close(socketFd);
+        }
+        if (commandProcessorThread.joinable()) {
+            commandProcessorThread.join();
         }
 
         serverSockets.clear();
@@ -90,11 +93,46 @@ void UDPServer::workerThreadFunction(int socketFd) {
             commandQueue.emplace(message, clientAddr);
         }
         queueCondition.notify_one();
-        std::cout << "Received message: " << message << std::endl;
     }
 }
 
-void UDPServer::processCommand(const std::string& message, sockaddr_in clientAddr) {
-    // Process the received command (similar to your existing logic)
-    std::cout << "Received message: " << message << std::endl;
+void UDPServer::processCommand() {
+    while (running) {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
+
+        while (!commandQueue.empty()) {
+            auto [message, clientAddr] = commandQueue.front();
+            commandQueue.pop();
+            lock.unlock();
+
+            size_t pos = message.find(':');
+            if (pos != std::string::npos) {
+                std::string command = message.substr(0, pos);
+                std::string params_str = message.substr(pos + 1);
+                std::vector<float> params;
+
+                size_t start = 0;
+                size_t end;
+                while ((end = params_str.find(',', start)) != std::string::npos) {
+                    try {
+                        params.push_back(std::stof(params_str.substr(start, end - start)));
+                    } catch (const std::exception &e) {
+                        std::cerr << "Error parsing parameter: " << e.what() << std::endl;
+                    }
+                    start = end + 1;
+                }
+
+                if (start < params_str.length()) {
+                    try {
+                        params.push_back(std::stof(params_str.substr(start)));
+                    } catch (const std::exception &e) {
+                        std::cerr << "Error parsing parameter: " << e.what() << std::endl;
+                    }
+                }
+                std::cout << "Received command: " << command << "Parameters: " << params_str << std::endl;
+                lock.lock();
+            }
+        }
+    }
 }
