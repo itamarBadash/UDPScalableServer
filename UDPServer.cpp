@@ -90,6 +90,7 @@ void UDPServer::workerThreadFunction(int socketFd) {
             commandQueue.emplace(message, clientAddr);
         }
         queueCondition.notify_one();
+        std::cout << "Received message: " << message << std::endl;
     }
 }
 
