@@ -51,13 +51,13 @@ build cmake_object_order_depends_target_UDPScalableServer: phony || CMakeFiles/U
 
 build CMakeFiles/UDPScalableServer.dir/main.cpp.obj: CXX_COMPILER__UDPScalableServer_unscanned_Debug C$:/Users/Badash/CLionProjects/UDPScalableServer/main.cpp || cmake_object_order_depends_target_UDPScalableServer
   DEP_FILE = CMakeFiles\UDPScalableServer.dir\main.cpp.obj.d
-  FLAGS = -g -fdiagnostics-color=always
+  FLAGS = -g -std=gnu++17 -fdiagnostics-color=always
   OBJECT_DIR = CMakeFiles\UDPScalableServer.dir
   OBJECT_FILE_DIR = CMakeFiles\UDPScalableServer.dir
 
 build CMakeFiles/UDPScalableServer.dir/UDPServer.cpp.obj: CXX_COMPILER__UDPScalableServer_unscanned_Debug C$:/Users/Badash/CLionProjects/UDPScalableServer/UDPServer.cpp || cmake_object_order_depends_target_UDPScalableServer
   DEP_FILE = CMakeFiles\UDPScalableServer.dir\UDPServer.cpp.obj.d
-  FLAGS = -g -fdiagnostics-color=always
+  FLAGS = -g -std=gnu++17 -fdiagnostics-color=always
   OBJECT_DIR = CMakeFiles\UDPScalableServer.dir
   OBJECT_FILE_DIR = CMakeFiles\UDPScalableServer.dir
 
@@ -116,6 +116,11 @@ build UDPScalableServer: phony UDPScalableServer.exe
 # Folder: C:/Users/Badash/CLionProjects/UDPScalableServer/cmake-build-debug
 
 build all: phony UDPScalableServer.exe
+
+# =============================================================================
+# Unknown Build Time Dependencies.
+# Tell Ninja that they may appear as side effects of build rules
+# otherwise ordered by order-only dependencies.
 
 # =============================================================================
 # Built-in targets

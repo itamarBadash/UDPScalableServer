@@ -1,7 +1,7 @@
 #include <iostream>
 #include <csignal>
 #include "UDPServer.h"
-//a
+
 UDPServer* serverPtr = nullptr;
 
 void signalHandler(int signum) {
