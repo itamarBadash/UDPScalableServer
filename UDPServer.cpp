@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 
 UDPServer::UDPServer(int port, int numSockets)
-        : port(port), numSockets(numSockets), running(false) {}
+        : port(port), numSockets(numSockets), running(false), bstop(false) {}
 
 UDPServer::~UDPServer() {
     stop();
@@ -43,6 +43,11 @@ bool UDPServer::start() {
         serverSockets.push_back(socketFd);
         threads.emplace_back(&UDPServer::workerThreadFunction, this, socketFd);
     }
+
+    for (size_t i = 0; i < numSockets; ++i) {
+        workerThreads.emplace_back(&UDPServer::workerThread, this);
+    }
+
     commandProcessorThread = std::thread(&UDPServer::processCommand, this);
     std::cout << "UDP Server started with " << numSockets << " sockets on port " << port << std::endl;
     return true;
@@ -51,9 +56,22 @@ bool UDPServer::start() {
 void UDPServer::stop() {
     if (running) {
         running = false;
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            bstop = true;
+        }
+        queueCondition.notify_all();
+        taskCondition.notify_all();
+
         for (auto& thread : threads) {
             if (thread.joinable()) {
                 thread.join();
+            }
+        }
+
+        for (auto& workerThread : workerThreads) {
+            if (workerThread.joinable()) {
+                workerThread.join();
             }
         }
 
@@ -106,33 +124,68 @@ void UDPServer::processCommand() {
             commandQueue.pop();
             lock.unlock();
 
-            size_t pos = message.find(':');
-            if (pos != std::string::npos) {
-                std::string command = message.substr(0, pos);
-                std::string params_str = message.substr(pos + 1);
-                std::vector<float> params;
+            enqueueTask([message, clientAddr, this] {
+                if (commandCallback) {
+                    commandCallback(message, clientAddr);
+                } else {
+                    size_t pos = message.find(':');
+                    if (pos != std::string::npos) {
+                        std::string command = message.substr(0, pos);
+                        std::string params_str = message.substr(pos + 1);
+                        std::vector<float> params;
 
-                size_t start = 0;
-                size_t end;
-                while ((end = params_str.find(',', start)) != std::string::npos) {
-                    try {
-                        params.push_back(std::stof(params_str.substr(start, end - start)));
-                    } catch (const std::exception &e) {
-                        std::cerr << "Error parsing parameter: " << e.what() << std::endl;
-                    }
-                    start = end + 1;
-                }
+                        size_t start = 0;
+                        size_t end;
+                        while ((end = params_str.find(',', start)) != std::string::npos) {
+                            try {
+                                params.push_back(std::stof(params_str.substr(start, end - start)));
+                            } catch (const std::exception &e) {
+                                std::cerr << "Error parsing parameter: " << e.what() << std::endl;
+                            }
+                            start = end + 1;
+                        }
 
-                if (start < params_str.length()) {
-                    try {
-                        params.push_back(std::stof(params_str.substr(start)));
-                    } catch (const std::exception &e) {
-                        std::cerr << "Error parsing parameter: " << e.what() << std::endl;
+                        if (start < params_str.length()) {
+                            try {
+                                params.push_back(std::stof(params_str.substr(start)));
+                            } catch (const std::exception &e) {
+                                std::cerr << "Error parsing parameter: " << e.what() << std::endl;
+                            }
+                        }
+                        std::cout << "Received command: " << command << " Parameters: " << params_str << std::endl;
                     }
                 }
-                std::cout << "Received command: " << command << " Parameters: " << params_str << std::endl;
-                lock.lock();
-            }
+            });
+
+            lock.lock();
         }
     }
+}
+
+void UDPServer::enqueueTask(std::function<void()> task) {
+    {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        taskQueue.push(std::move(task));
+    }
+    taskCondition.notify_one();
+}
+
+void UDPServer::workerThread() {
+    while (true) {
+        std::function<void()> task;
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            taskCondition.wait(lock, [this] { return bstop || !taskQueue.empty(); });
+            if (bstop && taskQueue.empty()) {
+                return;
+            }
+            task = std::move(taskQueue.front());
+            taskQueue.pop();
+        }
+        task();
+    }
+}
+
+void UDPServer::registerCommandCallback(std::function<void(const std::string&, const sockaddr_in&)> callback) {
+    commandCallback = std::move(callback);
 }

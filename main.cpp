@@ -1,5 +1,7 @@
 #include <iostream>
 #include <csignal>
+#include <arpa/inet.h>
+
 #include "UDPServer.h"
 
 UDPServer* serverPtr = nullptr;
@@ -11,6 +13,10 @@ void signalHandler(int signum) {
     exit(signum);
 }
 
+void handleCommand(const std::string& message, const sockaddr_in& clientAddr) {
+    std::cout << "Custom handler: " << message << std::endl;
+}
+
 int main() {
     UDPServer server(8080, 4);
     serverPtr = &server;
@@ -18,6 +24,9 @@ int main() {
     // Register signal handler
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
+
+    // Register command callback
+    server.registerCommandCallback(handleCommand);
 
     server.start();
 
