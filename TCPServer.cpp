@@ -55,7 +55,6 @@ bool TCPServer::start() {
     running = true;
     std::cout << "Server started with " << numSockets << " sockets on port " << port << std::endl;
 
-
     for (size_t i = 0; i < numSockets; ++i) {
         workerThreads.emplace_back(&TCPServer::workerThread, this);
     }
