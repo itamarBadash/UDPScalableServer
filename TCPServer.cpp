@@ -1,3 +1,4 @@
+// TCPServer.cpp
 #include "TCPServer.h"
 #include <iostream>
 #include <cstring>
@@ -5,46 +6,56 @@
 #include <arpa/inet.h>
 #include <algorithm>
 
-TCPServer::TCPServer(int port) : port(port), serverSocket(-1), running(false) {
-    std::memset(&serverAddr, 0, sizeof(serverAddr));
-}
+TCPServer::TCPServer(int port, int numSockets) : port(port), numSockets(numSockets), running(false) {}
 
 TCPServer::~TCPServer() {
     stop();
     cleanupThreads();
 }
 
-void TCPServer::setupServerAddress() {
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-    serverAddr.sin_port = htons(port);
+void TCPServer::setupServerAddress(sockaddr_in& addr, int port) {
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
 }
 
 bool TCPServer::start() {
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket < 0) {
-        std::cerr << "Error creating socket: " << strerror(errno) << std::endl;
-        return false;
-    }
+    for (int i = 0; i < numSockets; ++i) {
+        int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (serverSocket < 0) {
+            std::cerr << "Error creating socket: " << strerror(errno) << std::endl;
+            return false;
+        }
 
-    setupServerAddress();
+        int opt = 1;
+        if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+            std::cerr << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
+            close(serverSocket);
+            return false;
+        }
 
-    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        std::cerr << "Error binding socket: " << strerror(errno) << std::endl;
-        close(serverSocket);
-        return false;
-    }
+        sockaddr_in serverAddr;
+        setupServerAddress(serverAddr, port + i);
 
-    if (listen(serverSocket, 10) < 0) {
-        std::cerr << "Error listening on socket: " << strerror(errno) << std::endl;
-        close(serverSocket);
-        return false;
+        if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+            std::cerr << "Error binding socket: " << strerror(errno) << std::endl;
+            close(serverSocket);
+            return false;
+        }
+
+        if (listen(serverSocket, 10) < 0) {
+            std::cerr << "Error listening on socket: " << strerror(errno) << std::endl;
+            close(serverSocket);
+            return false;
+        }
+
+        serverSockets.push_back(serverSocket);
+        acceptThreads.emplace_back(&TCPServer::acceptConnections, this, serverSocket);
     }
 
     running = true;
-    std::cout << "Server started on port " << port << std::endl;
+    std::cout << "Server started with " << numSockets << " sockets on port " << port << std::endl;
 
-    std::thread(&TCPServer::acceptConnections, this).detach();
     commandProcessorThread = std::thread(&TCPServer::processCommands, this);
 
     return true;
@@ -53,7 +64,9 @@ bool TCPServer::start() {
 void TCPServer::stop() {
     if (running) {
         running = false;
-        close(serverSocket);
+        for (int serverSocket : serverSockets) {
+            close(serverSocket);
+        }
         std::cout << "Server stopped." << std::endl;
         queueCondition.notify_all();
         if (commandProcessorThread.joinable()) {
@@ -62,7 +75,7 @@ void TCPServer::stop() {
     }
 }
 
-void TCPServer::acceptConnections() {
+void TCPServer::acceptConnections(int serverSocket) {
     while (running) {
         int clientSocket = accept(serverSocket, nullptr, nullptr);
         if (clientSocket < 0) {
@@ -135,6 +148,13 @@ void TCPServer::cleanupThreads() {
         }
     }
     clientThreads.clear();
+
+    for (auto& thread : acceptThreads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+    acceptThreads.clear();
 }
 
 bool TCPServer::send_message(const std::string& message) {

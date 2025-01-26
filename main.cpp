@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "UDPServer.h"
+#include "TCPServer.h"
 
 UDPServer* serverPtr = nullptr;
 
@@ -20,7 +21,7 @@ void handleCommand(const std::vector<uint8_t>& message, const sockaddr_in& clien
 }
 
 int main() {
-    UDPServer server(8080, 4);
+    TCPServer server(8080, 4);
     serverPtr = &server;
 
     // Register signal handler

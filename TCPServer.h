@@ -1,3 +1,4 @@
+// TCPServer.h
 #ifndef UDPSCALABLESERVER_TCPSERVER_H
 #define UDPSCALABLESERVER_TCPSERVER_H
 
@@ -11,7 +12,7 @@
 
 class TCPServer {
 public:
-    TCPServer(int port);
+    TCPServer(int port, int numSockets);
     ~TCPServer();
 
     bool start();
@@ -20,15 +21,16 @@ public:
     bool send_message_to_client(const std::string &message, int clientSocket);
 
 private:
-    void setupServerAddress();
-    void acceptConnections();
+    void setupServerAddress(sockaddr_in& addr, int port);
+    void acceptConnections(int serverSocket);
     void handleClient(int clientSocket);
     void processCommands();
     void cleanupThreads();
 
     int port;
-    int serverSocket;
-    sockaddr_in serverAddr;
+    int numSockets;
+    std::vector<int> serverSockets;
+    std::vector<std::thread> acceptThreads;
     bool running;
 
     std::vector<int> clientSockets;
@@ -39,8 +41,6 @@ private:
     std::mutex queueMutex;
     std::queue<std::string> commandQueue;
     std::condition_variable queueCondition;
-
 };
-
 
 #endif //UDPSCALABLESERVER_TCPSERVER_H
