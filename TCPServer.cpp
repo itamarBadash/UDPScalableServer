@@ -55,7 +55,7 @@ bool TCPServer::start() {
     running = true;
     std::cout << "Server started with " << numSockets << " sockets on port " << port << std::endl;
 
-    commandProcessorThread = std::thread(&TCPServer::processCommands, this);
+    commandProcessorThread = std::thread(&TCPServer::processCommand, this);
     for (size_t i = 0; i < numSockets; ++i) {
         workerThreads.emplace_back(&TCPServer::workerThread, this);
     }
@@ -117,10 +117,15 @@ void TCPServer::handleClient(int clientSocket) {
         }
 
         buffer[bytesReceived] = '\0';
+        std::vector<uint8_t> message(buffer, buffer + bytesReceived);
+
+        sockaddr_in clientAddr;
+        socklen_t clientAddrLen = sizeof(clientAddr);
+        getpeername(clientSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
 
         {
             std::lock_guard<std::mutex> lock(queueMutex);
-            commandQueue.emplace(buffer, clientSocket);
+            commandQueue.emplace(std::move(message), clientAddr);
         }
         queueCondition.notify_one();
     }
@@ -132,19 +137,19 @@ void TCPServer::handleClient(int clientSocket) {
     }
 }
 
-void TCPServer::processCommands() {
+void TCPServer::processCommand() {
     while (running) {
         std::unique_lock<std::mutex> lock(queueMutex);
         queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
 
         while (!commandQueue.empty()) {
-            auto [message, clientSocket] = std::move(commandQueue.front());
+            auto [message, clientAddr] = std::move(commandQueue.front());
             commandQueue.pop();
             lock.unlock();
 
-            enqueueTask([message, clientSocket, this] {
+            enqueueTask([message = std::move(message), clientAddr, this] {
                 if (commandCallback) {
-                    commandCallback(message, clientSocket);
+                    commandCallback(message, clientAddr);
                 }
             });
 
