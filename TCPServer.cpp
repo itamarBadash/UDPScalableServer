@@ -47,13 +47,10 @@ bool TCPServer::start() {
 
         serverSockets.push_back(socketFd);
         listenerThreads.emplace_back(&TCPServer::workerThreadFunction, this, socketFd);
+        std::cout << "Socket " << i + 1 << " listening on port " << port << std::endl;
     }
 
-    for (size_t i = 0; i < numSockets; ++i) {
-        workerThreads.emplace_back(&TCPServer::workerThread, this);
-    }
     commandProcessorThread = std::thread(&TCPServer::processCommand, this);
-
     std::cout << "TCP Server started with " << numSockets << " sockets on port " << port << std::endl;
     return true;
 }
@@ -71,12 +68,6 @@ void TCPServer::stop() {
         for (auto& thread : listenerThreads) {
             if (thread.joinable()) {
                 thread.join();
-            }
-        }
-
-        for (auto& workerThread : workerThreads) {
-            if (workerThread.joinable()) {
-                workerThread.join();
             }
         }
 
@@ -105,12 +96,17 @@ void TCPServer::workerThreadFunction(int serverSocket) {
             continue;
         }
 
+        char clientIp[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, INET_ADDRSTRLEN);
+        std::cout << "Client connected: " << clientIp << ":" << ntohs(clientAddr.sin_port) << std::endl;
+
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             clientSockets.push_back(clientSocket);
-            clientAddresses[clientSocket] = clientAddr; // Save client address
+            clientAddresses[clientSocket] = clientAddr;
         }
 
+        // Receive data from client
         std::vector<uint8_t> buffer(1024);
         int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
         if (bytesReceived > 0) {
@@ -142,6 +138,8 @@ void TCPServer::processCommand() {
             commandQueue.pop();
             lock.unlock();
 
+            std::cout << "Processing message from client..." << std::endl;
+
             enqueueTask([message = std::move(message), clientAddr, this] {
                 if (commandCallback) {
                     commandCallback(message, clientAddr);
@@ -161,33 +159,6 @@ void TCPServer::enqueueTask(std::function<void()> task) {
     taskCondition.notify_one();
 }
 
-void TCPServer::workerThread() {
-    while (true) {
-        std::function<void()> task;
-        {
-            std::unique_lock<std::mutex> lock(queueMutex);
-            taskCondition.wait(lock, [this] { return bstop || !taskQueue.empty(); });
-            if (bstop && taskQueue.empty()) {
-                return;
-            }
-            task = std::move(taskQueue.front());
-            taskQueue.pop();
-        }
-        task();
-    }
-}
-
 void TCPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback) {
     commandCallback = std::move(callback);
-}
-
-void TCPServer::sendToClient(const std::vector<uint8_t>& message, int clientSocket) {
-    send(clientSocket, message.data(), message.size(), 0);
-}
-
-void TCPServer::sendToAllClients(const std::vector<uint8_t>& message) {
-    std::lock_guard<std::mutex> lock(queueMutex);
-    for (int clientSocket : clientSockets) {
-        sendToClient(message, clientSocket);
-    }
 }
