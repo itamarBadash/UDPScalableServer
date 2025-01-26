@@ -18,6 +18,7 @@ public:
 
 private:
     void workerThreadFunction(int socket);
+    void processCommand();
     void enqueueTask(std::function<void()> task);
     void workerThread();
 
@@ -33,6 +34,7 @@ private:
     std::queue<std::function<void()>> taskQueue;
     std::condition_variable queueCondition;
     std::condition_variable taskCondition;
+    std::thread commandProcessorThread;
 
     bool bstop;
     std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;

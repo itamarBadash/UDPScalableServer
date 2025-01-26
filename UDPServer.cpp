@@ -48,6 +48,8 @@ bool UDPServer::start() {
         workerThreads.emplace_back(&UDPServer::workerThread, this);
     }
 
+    commandProcessorThread = std::thread(&UDPServer::processCommand, this);
+
     std::cout << "UDP Server started with " << numSockets << " sockets on port " << port << std::endl;
     return true;
 }
@@ -78,6 +80,10 @@ void UDPServer::stop() {
             close(socketFd);
         }
 
+        if (commandProcessorThread.joinable()) {
+            commandProcessorThread.join();
+        }
+
         serverSockets.clear();
     }
     std::cout << "Server stopped." << std::endl;
@@ -97,10 +103,6 @@ void UDPServer::workerThreadFunction(int socketFd) {
             }
             continue;
         }
-        else{
-            std::cout<<"aaa"<<std::endl;
-        }
-
 
         buffer.resize(bytesReceived);
 
@@ -109,6 +111,27 @@ void UDPServer::workerThreadFunction(int socketFd) {
             commandQueue.emplace(std::move(buffer), clientAddr);
         }
         queueCondition.notify_one();
+    }
+}
+
+void UDPServer::processCommand() {
+    while (running) {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
+
+        while (!commandQueue.empty()) {
+            auto [message, clientAddr] = std::move(commandQueue.front());
+            commandQueue.pop();
+            lock.unlock();
+
+            enqueueTask([message = std::move(message), clientAddr, this] {
+                if (commandCallback) {
+                    commandCallback(message, clientAddr);
+                }
+            });
+
+            lock.lock();
+        }
     }
 }
 
