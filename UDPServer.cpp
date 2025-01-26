@@ -48,7 +48,6 @@ bool UDPServer::start() {
         workerThreads.emplace_back(&UDPServer::workerThread, this);
     }
 
-    commandProcessorThread = std::thread(&UDPServer::processCommand, this);
     std::cout << "UDP Server started with " << numSockets << " sockets on port " << port << std::endl;
     return true;
 }
@@ -78,9 +77,6 @@ void UDPServer::stop() {
         for (int socketFd : serverSockets) {
             close(socketFd);
         }
-        if (commandProcessorThread.joinable()) {
-            commandProcessorThread.join();
-        }
 
         serverSockets.clear();
     }
@@ -91,9 +87,9 @@ void UDPServer::workerThreadFunction(int socketFd) {
     while (running) {
         sockaddr_in clientAddr{};
         socklen_t clientAddrLen = sizeof(clientAddr);
-        char buffer[1024];
+        std::vector<uint8_t> buffer(1024);
 
-        int bytesReceived = recvfrom(socketFd, buffer, sizeof(buffer) - 1, 0,
+        int bytesReceived = recvfrom(socketFd, buffer.data(), buffer.size(), 0,
                                      (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (bytesReceived < 0) {
             if (errno != EWOULDBLOCK && errno != EAGAIN) {
@@ -102,63 +98,14 @@ void UDPServer::workerThreadFunction(int socketFd) {
             continue;
         }
 
-        buffer[bytesReceived] = '\0';
-        std::string message(buffer);
+        buffer.resize(bytesReceived);
 
         // Add the message to the command queue
         {
             std::lock_guard<std::mutex> lock(queueMutex);
-            commandQueue.emplace(message, clientAddr);
+            commandQueue.emplace(std::move(buffer), clientAddr);
         }
         queueCondition.notify_one();
-    }
-}
-
-void UDPServer::processCommand() {
-    while (running) {
-        std::unique_lock<std::mutex> lock(queueMutex);
-        queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
-
-        while (!commandQueue.empty()) {
-            auto [message, clientAddr] = commandQueue.front();
-            commandQueue.pop();
-            lock.unlock();
-
-            enqueueTask([message, clientAddr, this] {
-                if (commandCallback) {
-                    commandCallback(message, clientAddr);
-                } else {
-                    size_t pos = message.find(':');
-                    if (pos != std::string::npos) {
-                        std::string command = message.substr(0, pos);
-                        std::string params_str = message.substr(pos + 1);
-                        std::vector<float> params;
-
-                        size_t start = 0;
-                        size_t end;
-                        while ((end = params_str.find(',', start)) != std::string::npos) {
-                            try {
-                                params.push_back(std::stof(params_str.substr(start, end - start)));
-                            } catch (const std::exception &e) {
-                                std::cerr << "Error parsing parameter: " << e.what() << std::endl;
-                            }
-                            start = end + 1;
-                        }
-
-                        if (start < params_str.length()) {
-                            try {
-                                params.push_back(std::stof(params_str.substr(start)));
-                            } catch (const std::exception &e) {
-                                std::cerr << "Error parsing parameter: " << e.what() << std::endl;
-                            }
-                        }
-                        std::cout << "Received command: " << command << " Parameters: " << params_str << std::endl;
-                    }
-                }
-            });
-
-            lock.lock();
-        }
     }
 }
 
@@ -186,6 +133,6 @@ void UDPServer::workerThread() {
     }
 }
 
-void UDPServer::registerCommandCallback(std::function<void(const std::string&, const sockaddr_in&)> callback) {
+void UDPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback) {
     commandCallback = std::move(callback);
 }

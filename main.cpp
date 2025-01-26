@@ -1,6 +1,7 @@
 #include <iostream>
 #include <csignal>
 #include <arpa/inet.h>
+#include <vector>
 
 #include "UDPServer.h"
 
@@ -13,8 +14,9 @@ void signalHandler(int signum) {
     exit(signum);
 }
 
-void handleCommand(const std::string& message, const sockaddr_in& clientAddr) {
-    std::cout << "Custom handler: " << message << std::endl;
+void handleCommand(const std::vector<uint8_t>& message, const sockaddr_in& clientAddr) {
+    std::string strMessage(message.begin(), message.end());
+    std::cout << "Custom handler: " << strMessage << std::endl;
 }
 
 int main() {
