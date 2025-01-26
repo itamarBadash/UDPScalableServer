@@ -8,48 +8,45 @@
 #include <condition_variable>
 #include <functional>
 #include <netinet/in.h>
+#include <atomic>
 
 class TCPServer {
 public:
-    TCPServer(int port, int numSockets);
+    TCPServer(int port, int numSockets = 1); // Constructor with port and number of sockets
     ~TCPServer();
 
-    bool start();
-    void stop();
-    void registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback);
-    bool send_message(const std::string& message);
-    bool send_message_to_client(const std::string &message, int clientSocket);
+    bool start(); // Start the server
+    void stop();  // Stop the server
+
+    void registerCommandCallback(std::function<void(const std::vector<uint8_t>&, int)> callback); // Register callback
+    void sendToClient(const std::vector<uint8_t>& message, int clientSocket); // Send to a specific client
+    void sendToAllClients(const std::vector<uint8_t>& message); // Send to all connected clients
 
 private:
-    void setupServerAddress(sockaddr_in& addr, int port);
-    void acceptConnections(int serverSocket);
-    void handleClient(int clientSocket);
-    void processCommand();
-    void enqueueTask(std::function<void()> task);
-    void workerThread();
-    void cleanupThreads();
+    int port;                                 // Server port
+    int numSockets;                           // Number of server sockets for concurrency
+    std::atomic<bool> running;                // Server running state
 
-    int port;
-    int numSockets;
-    std::vector<int> serverSockets;
-    std::vector<std::thread> acceptThreads;
-    bool running;
+    std::vector<int> serverSockets;           // Server socket descriptors
+    std::vector<int> clientSockets;           // Connected client socket descriptors
+    std::vector<std::thread> listenerThreads; // Threads for each server socket
+    std::vector<std::thread> workerThreads;   // Worker threads to process tasks
 
-    std::vector<int> clientSockets;
-    std::vector<std::thread> clientThreads;
-    std::thread commandProcessorThread;
-    std::vector<std::thread> workerThreads;
+    std::queue<std::pair<std::vector<uint8_t>, int>> commandQueue; // Queue for client messages
+    std::queue<std::function<void()>> taskQueue;                   // Queue for tasks
+    std::mutex queueMutex;                                         // Mutex for queue protection
+    std::condition_variable queueCondition;                        // Condition variable for command queue
+    std::condition_variable taskCondition;                         // Condition variable for task queue
+    std::thread commandProcessorThread;                            // Thread to process commands
 
-    std::mutex clientSocketsMutex;
-    std::mutex queueMutex;
-    std::queue<std::pair<std::vector<uint8_t>, sockaddr_in>> commandQueue;
-    std::queue<std::function<void()>> taskQueue;
-    std::condition_variable queueCondition;
-    std::condition_variable taskCondition;
+    std::function<void(const std::vector<uint8_t>&, int)> commandCallback; // Callback for processing commands
+    std::atomic<bool> bstop;                                                // Stop flag for worker threads
 
-    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
-
-    bool bstop;
+    void workerThreadFunction(int socket);          // Worker thread function for accepting clients
+    void processCommand();                          // Process commands from the queue
+    void enqueueTask(std::function<void()> task);   // Enqueue a task for execution
+    void workerThread();                            // Task processing worker thread
+    void cleanupThreads();                          // Cleanup all threads
 };
 
-#endif //UDPSCALABLESERVER_TCPSERVER_H
+#endif // UDPSCALABLESERVER_TCPSERVER_H

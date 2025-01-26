@@ -3,63 +3,60 @@
 #include <cstring>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <algorithm>
 
-TCPServer::TCPServer(int port, int numSockets) : port(port), numSockets(numSockets), running(false), bstop(false) {}
+TCPServer::TCPServer(int port, int numSockets)
+        : port(port), numSockets(numSockets), running(false), bstop(false) {}
 
 TCPServer::~TCPServer() {
     stop();
-    cleanupThreads();
-}
-
-void TCPServer::setupServerAddress(sockaddr_in& addr, int port) {
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
 }
 
 bool TCPServer::start() {
+    running = true;
+
+    // Create and configure multiple server sockets
     for (int i = 0; i < numSockets; ++i) {
-        int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-        if (serverSocket < 0) {
+        int socketFd = socket(AF_INET, SOCK_STREAM, 0);
+        if (socketFd < 0) {
             std::cerr << "Error creating socket: " << strerror(errno) << std::endl;
             return false;
         }
 
         int opt = 1;
-        if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        if (setsockopt(socketFd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
             std::cerr << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
-            close(serverSocket);
+            close(socketFd);
             return false;
         }
 
-        sockaddr_in serverAddr;
-        setupServerAddress(serverAddr, port + i);
+        sockaddr_in serverAddr{};
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_addr.s_addr = INADDR_ANY;
+        serverAddr.sin_port = htons(port);
 
-        if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        if (bind(socketFd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
             std::cerr << "Error binding socket: " << strerror(errno) << std::endl;
-            close(serverSocket);
+            close(socketFd);
             return false;
         }
 
-        if (listen(serverSocket, 10) < 0) {
+        if (listen(socketFd, 10) < 0) {
             std::cerr << "Error listening on socket: " << strerror(errno) << std::endl;
-            close(serverSocket);
+            close(socketFd);
             return false;
         }
 
-        serverSockets.push_back(serverSocket);
-        acceptThreads.emplace_back(&TCPServer::acceptConnections, this, serverSocket);
+        serverSockets.push_back(socketFd);
+        listenerThreads.emplace_back(&TCPServer::workerThreadFunction, this, socketFd);
     }
 
-    running = true;
-    std::cout << "Server started with " << numSockets << " sockets on port " << port << std::endl;
-
+    // Start worker threads and command processor
     for (size_t i = 0; i < numSockets; ++i) {
         workerThreads.emplace_back(&TCPServer::workerThread, this);
     }
     commandProcessorThread = std::thread(&TCPServer::processCommand, this);
 
+    std::cout << "TCP Server started with " << numSockets << " sockets on port " << port << std::endl;
     return true;
 }
 
@@ -73,20 +70,39 @@ void TCPServer::stop() {
         queueCondition.notify_all();
         taskCondition.notify_all();
 
-        for (int serverSocket : serverSockets) {
-            close(serverSocket);
+        // Join listener threads
+        for (auto& thread : listenerThreads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
         }
-        std::cout << "Server stopped." << std::endl;
+
+        // Join worker threads
+        for (auto& workerThread : workerThreads) {
+            if (workerThread.joinable()) {
+                workerThread.join();
+            }
+        }
+
+        // Close sockets
+        for (int socketFd : serverSockets) {
+            close(socketFd);
+        }
+
         if (commandProcessorThread.joinable()) {
             commandProcessorThread.join();
         }
+
+        serverSockets.clear();
     }
+    std::cout << "Server stopped." << std::endl;
 }
 
-void TCPServer::acceptConnections(int serverSocket) {
+void TCPServer::workerThreadFunction(int socketFd) {
     while (running) {
-        std::cout<<"AAA"<<std::endl;
-        int clientSocket = accept(serverSocket, nullptr, nullptr);
+        sockaddr_in clientAddr{};
+        socklen_t clientAddrLen = sizeof(clientAddr);
+        int clientSocket = accept(socketFd, (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (clientSocket < 0) {
             if (running) {
                 std::cerr << "Error accepting connection: " << strerror(errno) << std::endl;
@@ -94,50 +110,25 @@ void TCPServer::acceptConnections(int serverSocket) {
             continue;
         }
 
-        std::cout << "Client connected." << std::endl;
-        {
-            std::lock_guard<std::mutex> lock(clientSocketsMutex);
-            clientSockets.push_back(clientSocket);
-        }
-        clientThreads.emplace_back(&TCPServer::handleClient, this, clientSocket);
-    }
-}
-
-void TCPServer::handleClient(int clientSocket) {
-    const int bufferSize = 1024;
-    char buffer[bufferSize];
-
-    while (running) {
-        int bytesReceived = recv(clientSocket, buffer, bufferSize - 1, 0);
-        if (bytesReceived < 0) {
-            std::cerr << "Error receiving data: " << strerror(errno) << std::endl;
-            break;
-        } else if (bytesReceived == 0) {
-            std::cout << "Client disconnected." << std::endl;
-            break;
-        }
-        else
-            std::cout<<"AAA"<<std::endl;
-
-
-        buffer[bytesReceived] = '\0';
-        std::vector<uint8_t> message(buffer, buffer + bytesReceived);
-
-        sockaddr_in clientAddr;
-        socklen_t clientAddrLen = sizeof(clientAddr);
-        getpeername(clientSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
-
         {
             std::lock_guard<std::mutex> lock(queueMutex);
-            commandQueue.emplace(std::move(message), clientAddr);
+            clientSockets.push_back(clientSocket);
         }
-        queueCondition.notify_one();
-    }
 
-    close(clientSocket);
-    {
-        std::lock_guard<std::mutex> lock(clientSocketsMutex);
-        clientSockets.erase(std::remove(clientSockets.begin(), clientSockets.end(), clientSocket), clientSockets.end());
+        // Receive data from client
+        std::vector<uint8_t> buffer(1024);
+        int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
+        if (bytesReceived > 0) {
+            buffer.resize(bytesReceived);
+
+            {
+                std::lock_guard<std::mutex> lock(queueMutex);
+                commandQueue.emplace(std::move(buffer), clientSocket);
+            }
+            queueCondition.notify_one();
+        } else {
+            close(clientSocket);
+        }
     }
 }
 
@@ -146,26 +137,25 @@ void TCPServer::processCommand() {
         std::unique_lock<std::mutex> lock(queueMutex);
         queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
 
-        if (!running && commandQueue.empty()) {
-            return;  // Exit if the server is stopping and there are no pending commands
-        }
-
         while (!commandQueue.empty()) {
-            auto [message, clientAddr] = std::move(commandQueue.front());
+            auto [message, clientSocket] = std::move(commandQueue.front());
             commandQueue.pop();
+            lock.unlock();
 
-            enqueueTask([message = std::move(message), clientAddr, this] {
+            enqueueTask([message = std::move(message), clientSocket, this] {
                 if (commandCallback) {
-                    commandCallback(message, clientAddr);
+                    commandCallback(message, clientSocket);
                 }
             });
+
+            lock.lock();
         }
     }
 }
 
 void TCPServer::enqueueTask(std::function<void()> task) {
     {
-        std::unique_lock<std::mutex> lock(queueMutex);
+        std::lock_guard<std::mutex> lock(queueMutex);
         taskQueue.push(std::move(task));
     }
     taskCondition.notify_one();
@@ -187,72 +177,17 @@ void TCPServer::workerThread() {
     }
 }
 
-void TCPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback) {
+void TCPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, int)> callback) {
     commandCallback = std::move(callback);
 }
 
-void TCPServer::cleanupThreads() {
-    for (auto& thread : clientThreads) {
-        if (thread.joinable()) {
-            thread.join();
-        }
-    }
-    clientThreads.clear();
-
-    for (auto& thread : acceptThreads) {
-        if (thread.joinable()) {
-            thread.join();
-        }
-    }
-    acceptThreads.clear();
-
-    for (auto& thread : workerThreads) {
-        if (thread.joinable()) {
-            thread.join();
-        }
-    }
-    workerThreads.clear();
+void TCPServer::sendToClient(const std::vector<uint8_t>& message, int clientSocket) {
+    send(clientSocket, message.data(), message.size(), 0);
 }
 
-bool TCPServer::send_message(const std::string& message) {
-    std::lock_guard<std::mutex> lock(clientSocketsMutex);
-    if (clientSockets.empty()) {
-        std::cerr << "No clients connected" << std::endl;
-        return false;
-    }
-
-    size_t totalBytesSent = 0;
-    size_t messageLength = message.size();
-    const char* messagePtr = message.c_str();
-
+void TCPServer::sendToAllClients(const std::vector<uint8_t>& message) {
+    std::lock_guard<std::mutex> lock(queueMutex);
     for (int clientSocket : clientSockets) {
-        totalBytesSent = 0;
-        while (totalBytesSent < messageLength) {
-            ssize_t bytesSent = send(clientSocket, messagePtr + totalBytesSent, messageLength - totalBytesSent, 0);
-            if (bytesSent < 0) {
-                std::cerr << "Failed to send message to client. Error: " << strerror(errno) << std::endl;
-                break;
-            }
-            totalBytesSent += bytesSent;
-        }
+        sendToClient(message, clientSocket);
     }
-
-    return true;
-}
-
-bool TCPServer::send_message_to_client(const std::string& message, int clientSocket) {
-    size_t totalBytesSent = 0;
-    size_t messageLength = message.size();
-    const char* messagePtr = message.c_str();
-
-    while (totalBytesSent < messageLength) {
-        ssize_t bytesSent = send(clientSocket, messagePtr + totalBytesSent, messageLength - totalBytesSent, 0);
-        if (bytesSent < 0) {
-            std::cerr << "Failed to send message to client. Error: " << strerror(errno) << std::endl;
-            return false;
-        }
-        totalBytesSent += bytesSent;
-    }
-
-    return true;
 }
