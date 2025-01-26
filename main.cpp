@@ -26,7 +26,7 @@ void handleCommand(const std::vector<uint8_t>& message, const sockaddr_in& clien
     // Echo the message back to the client
     std::vector<uint8_t> response(message);
     response.insert(response.end(), {' ', '-', ' ', 'e', 'c', 'h', 'o', 'e', 'd'});
-    serverPtr->sendToClient(response,clientAddr); // Broadcast the response
+    serverPtr->sendToAllClients(response); // Broadcast the response
 }
 
 int main() {
