@@ -18,7 +18,7 @@ public:
     void stop();
     bool send_message(const std::string& message);
     bool send_message_to_client(const std::string &message, int clientSocket);
-    void registerCommandCallback(std::function<void(const std::string&)> callback);
+    void registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback);
 
 private:
     void setupServerAddress(sockaddr_in& addr, int port);
@@ -42,12 +42,13 @@ private:
 
     std::mutex clientSocketsMutex;
     std::mutex queueMutex;
-    std::queue<std::string> commandQueue;
+    std::queue<std::pair<std::string, int>> commandQueue;
     std::queue<std::function<void()>> taskQueue;
     std::condition_variable queueCondition;
     std::condition_variable taskCondition;
 
-    std::function<void(const std::string&)> commandCallback;
+    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
+
     bool bstop;
 };
 

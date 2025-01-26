@@ -120,7 +120,7 @@ void TCPServer::handleClient(int clientSocket) {
 
         {
             std::lock_guard<std::mutex> lock(queueMutex);
-            commandQueue.push(buffer);
+            commandQueue.emplace(buffer, clientSocket);
         }
         queueCondition.notify_one();
     }
@@ -138,13 +138,13 @@ void TCPServer::processCommands() {
         queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
 
         while (!commandQueue.empty()) {
-            std::string message = commandQueue.front();
+            auto [message, clientSocket] = std::move(commandQueue.front());
             commandQueue.pop();
             lock.unlock();
 
-            enqueueTask([message, this] {
+            enqueueTask([message, clientSocket, this] {
                 if (commandCallback) {
-                    commandCallback(message);
+                    commandCallback(message, clientSocket);
                 }
             });
 
@@ -177,7 +177,7 @@ void TCPServer::workerThread() {
     }
 }
 
-void TCPServer::registerCommandCallback(std::function<void(const std::string&)> callback) {
+void TCPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback) {
     commandCallback = std::move(callback);
 }
 
