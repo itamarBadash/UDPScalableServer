@@ -170,6 +170,7 @@ void UDPServer::sendToClient(const std::vector<uint8_t>& message, const sockaddr
 }
 
 void UDPServer::sendToAllClients(const std::vector<uint8_t>& message) {
+    std::cout<<"aa"<<std::endl;
     for (const auto& client : clients) {
         sendToClient(message, client);
     }
