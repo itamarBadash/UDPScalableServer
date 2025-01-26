@@ -116,6 +116,9 @@ void TCPServer::handleClient(int clientSocket) {
             std::cout << "Client disconnected." << std::endl;
             break;
         }
+        else
+            std::cout<<"AAA"<<std::endl;
+
 
         buffer[bytesReceived] = '\0';
         std::vector<uint8_t> message(buffer, buffer + bytesReceived);
@@ -140,7 +143,6 @@ void TCPServer::handleClient(int clientSocket) {
 
 void TCPServer::processCommand() {
     while (running) {
-        std::cout<<"AAA"<<std::endl;
         std::unique_lock<std::mutex> lock(queueMutex);
         queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
 
