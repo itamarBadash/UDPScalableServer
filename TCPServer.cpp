@@ -195,8 +195,6 @@ void TCPServer::sendToClient(const std::vector<uint8_t>& message, int clientSock
     if (bytesSent < 0) {
         std::cerr << "Error sending message to client socket " << clientSocket
                   << ": " << strerror(errno) << std::endl;
-    } else {
-        std::cout << "Sent " << bytesSent << " bytes to client socket " << clientSocket << std::endl;
     }
 }
 
@@ -212,8 +210,6 @@ void TCPServer::sendToAllClients(const std::vector<uint8_t>& message) {
         if (bytesSent < 0) {
             std::cerr << "Error sending message to client socket " << clientSocket
                       << ": " << strerror(errno) << std::endl;
-        } else {
-            std::cout << "Sent " << bytesSent << " bytes to client socket " << clientSocket << std::endl;
         }
     }
 }

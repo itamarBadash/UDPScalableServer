@@ -20,7 +20,7 @@ void handleCommand(const std::vector<uint8_t>& message, const sockaddr_in& clien
     char clientIp[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, INET_ADDRSTRLEN);
 
-    std::cout << "Received message from " << clientIp << ":" << ntohs(clientAddr.sin_port)
+    std::cout << "nigga " << clientIp << ":" << ntohs(clientAddr.sin_port)
               << " - " << strMessage << std::endl;
 
     // Echo the message back to the client
