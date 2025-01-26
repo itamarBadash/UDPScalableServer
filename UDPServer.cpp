@@ -134,7 +134,5 @@ void UDPServer::workerThread() {
 }
 
 void UDPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback) {
-    std::cout << "Custom handler: " << std::endl;
-
     commandCallback = std::move(callback);
 }
