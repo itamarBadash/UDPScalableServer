@@ -134,12 +134,14 @@ void TCPServer::handleClient(int clientSocket) {
             queueCondition.notify_one();
         } else if (bytesReceived == 0) {
             std::cout << "Client disconnected: socket " << clientSocket << std::endl;
-            break;
+            break; // Graceful disconnect
         } else {
             std::cerr << "Error receiving data from socket " << clientSocket
                       << ": " << strerror(errno) << std::endl;
-            break;
+            break; // Error, close the connection
         }
+
+        buffer.resize(bufferSize); // Reset buffer size for the next read
     }
 
     // Cleanup on disconnect
