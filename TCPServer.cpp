@@ -138,18 +138,15 @@ void TCPServer::processCommand() {
             commandQueue.pop();
             lock.unlock();
 
-            std::cout << "Processing message from client..." << std::endl;
-
-            enqueueTask([message = std::move(message), clientAddr, this] {
-                if (commandCallback) {
-                    commandCallback(message, clientAddr);
-                }
-            });
+            if (commandCallback) {
+                commandCallback(message, clientAddr);
+            }
 
             lock.lock();
         }
     }
 }
+
 
 void TCPServer::enqueueTask(std::function<void()> task) {
     {
