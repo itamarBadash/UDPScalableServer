@@ -98,32 +98,56 @@ void TCPServer::workerThreadFunction(int serverSocket) {
 
         char clientIp[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, INET_ADDRSTRLEN);
+        std::cout << "Client connected: " << clientIp << ":" << ntohs(clientAddr.sin_port) << std::endl;
 
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             clientSockets.push_back(clientSocket);
-            clientAddresses[clientSocket] = clientAddr;
+            clientAddresses[clientSocket] = clientAddr; // Save client address
         }
 
-        // Receive data from client
-        std::vector<uint8_t> buffer(1024);
+        // Start a new thread to handle this client
+        clientThreads.emplace_back(&TCPServer::handleClient, this, clientSocket);
+    }
+}
+
+void TCPServer::handleClient(int clientSocket) {
+    const size_t bufferSize = 1024;
+    std::vector<uint8_t> buffer(bufferSize);
+
+    while (running) {
         int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
         if (bytesReceived > 0) {
             buffer.resize(bytesReceived);
+
+            // Look up client address
+            sockaddr_in clientAddr;
+            {
+                std::lock_guard<std::mutex> lock(queueMutex);
+                clientAddr = clientAddresses[clientSocket];
+            }
 
             {
                 std::lock_guard<std::mutex> lock(queueMutex);
                 commandQueue.emplace(std::move(buffer), clientAddr);
             }
             queueCondition.notify_one();
+        } else if (bytesReceived == 0) {
+            std::cout << "Client disconnected: socket " << clientSocket << std::endl;
+            break;
         } else {
-            close(clientSocket);
-            {
-                std::lock_guard<std::mutex> lock(queueMutex);
-                clientSockets.erase(std::remove(clientSockets.begin(), clientSockets.end(), clientSocket), clientSockets.end());
-                clientAddresses.erase(clientSocket);
-            }
+            std::cerr << "Error receiving data from socket " << clientSocket
+                      << ": " << strerror(errno) << std::endl;
+            break;
         }
+    }
+
+    // Cleanup on disconnect
+    close(clientSocket);
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        clientSockets.erase(std::remove(clientSockets.begin(), clientSockets.end(), clientSocket), clientSockets.end());
+        clientAddresses.erase(clientSocket);
     }
 }
 
