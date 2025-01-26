@@ -15,6 +15,8 @@ void signalHandler(int signum) {
 }
 
 void handleCommand(const std::vector<uint8_t>& message, const sockaddr_in& clientAddr) {
+    std::cout << "Custom handler: " << std::endl;
+
     std::string strMessage(message.begin(), message.end());
     std::cout << "Custom handler: " << strMessage << std::endl;
 }
