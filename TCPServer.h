@@ -27,21 +27,21 @@ private:
     int numSockets;
     std::atomic<bool> running;
 
-    std::vector<int> serverSockets;           // Server sockets
-    std::map<int, sockaddr_in> clientAddresses; // Map of client sockets to their sockaddr_in
-    std::vector<int> clientSockets;           // List of connected client sockets
-    std::vector<std::thread> listenerThreads; // Threads for each server socket
-    std::vector<std::thread> workerThreads;   // Worker threads for task processing
+    std::vector<int> serverSockets;
+    std::map<int, sockaddr_in> clientAddresses;
+    std::vector<int> clientSockets;
+    std::vector<std::thread> listenerThreads;
+    std::vector<std::thread> workerThreads;
 
-    std::queue<std::pair<std::vector<uint8_t>, sockaddr_in>> commandQueue; // Command queue
-    std::queue<std::function<void()>> taskQueue;                           // Task queue
-    std::mutex queueMutex;                                                 // Mutex for command queue
-    std::condition_variable queueCondition;                                // Condition variable for command queue
-    std::condition_variable taskCondition;                                 // Condition variable for task queue
-    std::thread commandProcessorThread;                                    // Command processor thread
+    std::queue<std::pair<std::vector<uint8_t>, sockaddr_in>> commandQueue;
+    std::queue<std::function<void()>> taskQueue;
+    std::mutex queueMutex;
+    std::condition_variable queueCondition;
+    std::condition_variable taskCondition;
+    std::thread commandProcessorThread;
 
-    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback; // Command callback
-    std::atomic<bool> bstop;                                                              // Stop flag for workers
+    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
+    std::atomic<bool> bstop;
 
     void workerThreadFunction(int serverSocket);
     void processCommand();
