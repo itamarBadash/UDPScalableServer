@@ -98,7 +98,6 @@ void TCPServer::workerThreadFunction(int serverSocket) {
 
         char clientIp[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, INET_ADDRSTRLEN);
-        std::cout << "Client connected: " << clientIp << ":" << ntohs(clientAddr.sin_port) << std::endl;
 
         {
             std::lock_guard<std::mutex> lock(queueMutex);
