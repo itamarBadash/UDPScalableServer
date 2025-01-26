@@ -139,6 +139,7 @@ void TCPServer::handleClient(int clientSocket) {
 
 void TCPServer::processCommand() {
     while (running) {
+        std::cout<<"aaa"<<std::endl;
         std::unique_lock<std::mutex> lock(queueMutex);
         queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
 
