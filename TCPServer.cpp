@@ -55,10 +55,11 @@ bool TCPServer::start() {
     running = true;
     std::cout << "Server started with " << numSockets << " sockets on port " << port << std::endl;
 
-    commandProcessorThread = std::thread(&TCPServer::processCommand, this);
+
     for (size_t i = 0; i < numSockets; ++i) {
         workerThreads.emplace_back(&TCPServer::workerThread, this);
     }
+    commandProcessorThread = std::thread(&TCPServer::processCommand, this);
 
     return true;
 }
@@ -139,22 +140,22 @@ void TCPServer::handleClient(int clientSocket) {
 
 void TCPServer::processCommand() {
     while (running) {
-        std::cout<<"aaa"<<std::endl;
         std::unique_lock<std::mutex> lock(queueMutex);
         queueCondition.wait(lock, [this] { return !commandQueue.empty() || !running; });
+
+        if (!running && commandQueue.empty()) {
+            return;  // Exit if the server is stopping and there are no pending commands
+        }
 
         while (!commandQueue.empty()) {
             auto [message, clientAddr] = std::move(commandQueue.front());
             commandQueue.pop();
-            lock.unlock();
 
             enqueueTask([message = std::move(message), clientAddr, this] {
                 if (commandCallback) {
                     commandCallback(message, clientAddr);
                 }
             });
-
-            lock.lock();
         }
     }
 }
