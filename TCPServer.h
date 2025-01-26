@@ -12,41 +12,41 @@
 
 class TCPServer {
 public:
-    TCPServer(int port, int numSockets = 1); // Constructor with port and number of sockets
+    TCPServer(int port, int numSockets = 1);
     ~TCPServer();
 
-    bool start(); // Start the server
-    void stop();  // Stop the server
+    bool start();
+    void stop();
+    void registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback);
 
-    void registerCommandCallback(std::function<void(const std::vector<uint8_t>&, int)> callback); // Register callback
-    void sendToClient(const std::vector<uint8_t>& message, int clientSocket); // Send to a specific client
-    void sendToAllClients(const std::vector<uint8_t>& message); // Send to all connected clients
+    void sendToClient(const std::vector<uint8_t>& message, int clientSocket);
+    void sendToAllClients(const std::vector<uint8_t>& message);
 
 private:
-    int port;                                 // Server port
-    int numSockets;                           // Number of server sockets for concurrency
-    std::atomic<bool> running;                // Server running state
+    int port;
+    int numSockets;
+    std::atomic<bool> running;
 
-    std::vector<int> serverSockets;           // Server socket descriptors
-    std::vector<int> clientSockets;           // Connected client socket descriptors
-    std::vector<std::thread> listenerThreads; // Threads for each server socket
-    std::vector<std::thread> workerThreads;   // Worker threads to process tasks
+    std::vector<int> serverSockets;
+    std::vector<int> clientSockets;
+    std::vector<std::thread> listenerThreads;
+    std::vector<std::thread> workerThreads;
 
-    std::queue<std::pair<std::vector<uint8_t>, int>> commandQueue; // Queue for client messages
-    std::queue<std::function<void()>> taskQueue;                   // Queue for tasks
-    std::mutex queueMutex;                                         // Mutex for queue protection
-    std::condition_variable queueCondition;                        // Condition variable for command queue
-    std::condition_variable taskCondition;                         // Condition variable for task queue
-    std::thread commandProcessorThread;                            // Thread to process commands
+    std::queue<std::pair<std::vector<uint8_t>, sockaddr_in>> commandQueue;
+    std::queue<std::function<void()>> taskQueue;
+    std::mutex queueMutex;
+    std::condition_variable queueCondition;
+    std::condition_variable taskCondition;
+    std::thread commandProcessorThread;
 
-    std::function<void(const std::vector<uint8_t>&, int)> commandCallback; // Callback for processing commands
-    std::atomic<bool> bstop;                                                // Stop flag for worker threads
+    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
+    std::atomic<bool> bstop;
 
-    void workerThreadFunction(int socket);          // Worker thread function for accepting clients
-    void processCommand();                          // Process commands from the queue
-    void enqueueTask(std::function<void()> task);   // Enqueue a task for execution
-    void workerThread();                            // Task processing worker thread
-    void cleanupThreads();                          // Cleanup all threads
+    void workerThreadFunction(int serverSocket);
+    void processCommand();
+    void enqueueTask(std::function<void()> task);
+    void workerThread();
+    void cleanupThreads();
 };
 
 #endif // UDPSCALABLESERVER_TCPSERVER_H
