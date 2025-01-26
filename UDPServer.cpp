@@ -108,10 +108,28 @@ void UDPServer::workerThreadFunction(int socketFd) {
 
         {
             std::lock_guard<std::mutex> lock(queueMutex);
+            if (!isClientRegistered(clientAddr)) {
+                clients.push_back(clientAddr);
+            }
+        }
+
+        // Add the message to the command queue
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
             commandQueue.emplace(std::move(buffer), clientAddr);
         }
         queueCondition.notify_one();
     }
+}
+
+bool UDPServer::isClientRegistered(const sockaddr_in& clientAddr) {
+    for (const auto& client : clients) {
+        if (client.sin_addr.s_addr == clientAddr.sin_addr.s_addr &&
+            client.sin_port == clientAddr.sin_port) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void UDPServer::processCommand() {

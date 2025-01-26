@@ -37,7 +37,7 @@ private:
     std::condition_variable queueCondition;
     std::condition_variable taskCondition;
     std::thread commandProcessorThread;
-
+    bool isClientRegistered(const sockaddr_in& clientAddr);
     bool bstop;
     std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
 
