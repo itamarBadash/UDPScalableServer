@@ -85,6 +85,7 @@ void TCPServer::stop() {
 
 void TCPServer::acceptConnections(int serverSocket) {
     while (running) {
+        std::cout<<"AAA"<<std::endl;
         int clientSocket = accept(serverSocket, nullptr, nullptr);
         if (clientSocket < 0) {
             if (running) {
