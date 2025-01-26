@@ -6,7 +6,7 @@
 #include "UDPServer.h"
 #include "TCPServer.h"
 
-TCPServer* serverPtr = nullptr;
+UDPServer* serverPtr = nullptr;
 
 void signalHandler(int signum) {
     if (serverPtr) {
@@ -30,7 +30,7 @@ void handleCommand(const std::vector<uint8_t>& message, const sockaddr_in& clien
 }
 
 int main() {
-    TCPServer server(8080, 4);
+    UDPServer server(8080, 4);
     serverPtr = &server;
 
     // Register signal handler
