@@ -6,7 +6,7 @@
 #include "UDPServer.h"
 #include "TCPServer.h"
 
-UDPServer* serverPtr = nullptr;
+TCPServer* serverPtr = nullptr;
 
 void signalHandler(int signum) {
     if (serverPtr) {

@@ -1,4 +1,3 @@
-// TCPServer.cpp
 #include "TCPServer.h"
 #include <iostream>
 #include <cstring>
@@ -6,7 +5,7 @@
 #include <arpa/inet.h>
 #include <algorithm>
 
-TCPServer::TCPServer(int port, int numSockets) : port(port), numSockets(numSockets), running(false) {}
+TCPServer::TCPServer(int port, int numSockets) : port(port), numSockets(numSockets), running(false), bstop(false) {}
 
 TCPServer::~TCPServer() {
     stop();
@@ -57,6 +56,9 @@ bool TCPServer::start() {
     std::cout << "Server started with " << numSockets << " sockets on port " << port << std::endl;
 
     commandProcessorThread = std::thread(&TCPServer::processCommands, this);
+    for (size_t i = 0; i < numSockets; ++i) {
+        workerThreads.emplace_back(&TCPServer::workerThread, this);
+    }
 
     return true;
 }
@@ -64,11 +66,17 @@ bool TCPServer::start() {
 void TCPServer::stop() {
     if (running) {
         running = false;
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            bstop = true;
+        }
+        queueCondition.notify_all();
+        taskCondition.notify_all();
+
         for (int serverSocket : serverSockets) {
             close(serverSocket);
         }
         std::cout << "Server stopped." << std::endl;
-        queueCondition.notify_all();
         if (commandProcessorThread.joinable()) {
             commandProcessorThread.join();
         }
@@ -134,11 +142,43 @@ void TCPServer::processCommands() {
             commandQueue.pop();
             lock.unlock();
 
-            // Handle the command here (omitted for brevity)
+            enqueueTask([message, this] {
+                if (commandCallback) {
+                    commandCallback(message);
+                }
+            });
 
             lock.lock();
         }
     }
+}
+
+void TCPServer::enqueueTask(std::function<void()> task) {
+    {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        taskQueue.push(std::move(task));
+    }
+    taskCondition.notify_one();
+}
+
+void TCPServer::workerThread() {
+    while (true) {
+        std::function<void()> task;
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            taskCondition.wait(lock, [this] { return bstop || !taskQueue.empty(); });
+            if (bstop && taskQueue.empty()) {
+                return;
+            }
+            task = std::move(taskQueue.front());
+            taskQueue.pop();
+        }
+        task();
+    }
+}
+
+void TCPServer::registerCommandCallback(std::function<void(const std::string&)> callback) {
+    commandCallback = std::move(callback);
 }
 
 void TCPServer::cleanupThreads() {
@@ -155,6 +195,13 @@ void TCPServer::cleanupThreads() {
         }
     }
     acceptThreads.clear();
+
+    for (auto& thread : workerThreads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+    workerThreads.clear();
 }
 
 bool TCPServer::send_message(const std::string& message) {
