@@ -162,3 +162,15 @@ void UDPServer::workerThread() {
 void UDPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback) {
     commandCallback = std::move(callback);
 }
+
+void UDPServer::sendToClient(const std::vector<uint8_t>& message, const sockaddr_in& clientAddr) {
+    for (int socketFd : serverSockets) {
+        sendto(socketFd, message.data(), message.size(), 0, (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+    }
+}
+
+void UDPServer::sendToAllClients(const std::vector<uint8_t>& message) {
+    for (const auto& client : clients) {
+        sendToClient(message, client);
+    }
+}

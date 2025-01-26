@@ -15,6 +15,8 @@ public:
     bool start();
     void stop();
     void registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback);
+    void sendToClient(const std::vector<uint8_t>& message, const sockaddr_in& clientAddr);
+    void sendToAllClients(const std::vector<uint8_t>& message);
 
 private:
     void workerThreadFunction(int socket);
@@ -38,4 +40,6 @@ private:
 
     bool bstop;
     std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
+
+    std::vector<sockaddr_in> clients;
 };
