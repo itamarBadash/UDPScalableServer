@@ -17,7 +17,16 @@ void signalHandler(int signum) {
 
 void handleCommand(const std::vector<uint8_t>& message, const sockaddr_in& clientAddr) {
     std::string strMessage(message.begin(), message.end());
-    std::cout << "nigga: " << strMessage << std::endl;
+    char clientIp[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, INET_ADDRSTRLEN);
+
+    std::cout << "Received message from " << clientIp << ":" << ntohs(clientAddr.sin_port)
+              << " - " << strMessage << std::endl;
+
+    // Echo the message back to the client
+    std::vector<uint8_t> response(message);
+    response.insert(response.end(), {' ', '-', ' ', 'e', 'c', 'h', 'o', 'e', 'd'});
+    serverPtr->sendToAllClients(response); // Broadcast the response
 }
 
 int main() {

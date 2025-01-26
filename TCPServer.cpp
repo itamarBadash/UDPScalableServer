@@ -158,3 +158,37 @@ void TCPServer::enqueueTask(std::function<void()> task) {
 void TCPServer::registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback) {
     commandCallback = std::move(callback);
 }
+
+void TCPServer::sendToClient(const std::vector<uint8_t>& message, int clientSocket) {
+    if (message.empty()) {
+        std::cerr << "Cannot send an empty message to client." << std::endl;
+        return;
+    }
+
+    ssize_t bytesSent = send(clientSocket, message.data(), message.size(), 0);
+    if (bytesSent < 0) {
+        std::cerr << "Error sending message to client socket " << clientSocket
+                  << ": " << strerror(errno) << std::endl;
+    } else {
+        std::cout << "Sent " << bytesSent << " bytes to client socket " << clientSocket << std::endl;
+    }
+}
+
+void TCPServer::sendToAllClients(const std::vector<uint8_t>& message) {
+    if (message.empty()) {
+        std::cerr << "Cannot send an empty message to all clients." << std::endl;
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(queueMutex); // Protect access to clientSockets
+    for (int clientSocket : clientSockets) {
+        ssize_t bytesSent = send(clientSocket, message.data(), message.size(), 0);
+        if (bytesSent < 0) {
+            std::cerr << "Error sending message to client socket " << clientSocket
+                      << ": " << strerror(errno) << std::endl;
+        } else {
+            std::cout << "Sent " << bytesSent << " bytes to client socket " << clientSocket << std::endl;
+        }
+    }
+}
+
