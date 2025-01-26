@@ -97,10 +97,13 @@ void UDPServer::workerThreadFunction(int socketFd) {
             }
             continue;
         }
+        else{
+            std::cout<<"aaa"<<std::endl;
+        }
+
 
         buffer.resize(bytesReceived);
 
-        // Add the message to the command queue
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             commandQueue.emplace(std::move(buffer), clientAddr);
