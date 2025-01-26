@@ -108,6 +108,7 @@ void TCPServer::workerThreadFunction(int serverSocket) {
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             clientSockets.push_back(clientSocket);
+            clientAddresses[clientSocket] = clientAddr; // Save client address
         }
 
         std::vector<uint8_t> buffer(1024);
@@ -122,6 +123,11 @@ void TCPServer::workerThreadFunction(int serverSocket) {
             queueCondition.notify_one();
         } else {
             close(clientSocket);
+            {
+                std::lock_guard<std::mutex> lock(queueMutex);
+                clientSockets.erase(std::remove(clientSockets.begin(), clientSockets.end(), clientSocket), clientSockets.end());
+                clientAddresses.erase(clientSocket);
+            }
         }
     }
 }

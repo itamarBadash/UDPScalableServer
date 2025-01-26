@@ -1,5 +1,4 @@
-#ifndef UDPSCALABLESERVER_TCPSERVER_H
-#define UDPSCALABLESERVER_TCPSERVER_H
+#pragma once
 
 #include <vector>
 #include <thread>
@@ -9,6 +8,7 @@
 #include <functional>
 #include <netinet/in.h>
 #include <atomic>
+#include <map>
 
 class TCPServer {
 public:
@@ -27,20 +27,21 @@ private:
     int numSockets;
     std::atomic<bool> running;
 
-    std::vector<int> serverSockets;
-    std::vector<int> clientSockets;
-    std::vector<std::thread> listenerThreads;
-    std::vector<std::thread> workerThreads;
+    std::vector<int> serverSockets;           // Server sockets
+    std::map<int, sockaddr_in> clientAddresses; // Map of client sockets to their sockaddr_in
+    std::vector<int> clientSockets;           // List of connected client sockets
+    std::vector<std::thread> listenerThreads; // Threads for each server socket
+    std::vector<std::thread> workerThreads;   // Worker threads for task processing
 
-    std::queue<std::pair<std::vector<uint8_t>, sockaddr_in>> commandQueue;
-    std::queue<std::function<void()>> taskQueue;
-    std::mutex queueMutex;
-    std::condition_variable queueCondition;
-    std::condition_variable taskCondition;
-    std::thread commandProcessorThread;
+    std::queue<std::pair<std::vector<uint8_t>, sockaddr_in>> commandQueue; // Command queue
+    std::queue<std::function<void()>> taskQueue;                           // Task queue
+    std::mutex queueMutex;                                                 // Mutex for command queue
+    std::condition_variable queueCondition;                                // Condition variable for command queue
+    std::condition_variable taskCondition;                                 // Condition variable for task queue
+    std::thread commandProcessorThread;                                    // Command processor thread
 
-    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
-    std::atomic<bool> bstop;
+    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback; // Command callback
+    std::atomic<bool> bstop;                                                              // Stop flag for workers
 
     void workerThreadFunction(int serverSocket);
     void processCommand();
@@ -48,5 +49,3 @@ private:
     void workerThread();
     void cleanupThreads();
 };
-
-#endif // UDPSCALABLESERVER_TCPSERVER_H
