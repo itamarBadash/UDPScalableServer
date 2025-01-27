@@ -13,8 +13,8 @@ option(BUILD_SHARED_LIBS "Build shared libraries instead of static ones" ON)
 
 # Define the library
 add_library(EMServers
-        UDPServer.cpp
-        TCPServer.cpp
+        SourceFiles/UDPServer.cpp
+        SourceFiles/TCPServer.cpp
 )
 
 # Include the current source directory for public headers
@@ -38,8 +38,8 @@ install(TARGETS EMServers
 )
 
 install(FILES
-        UDPServer.h
-        TCPServer.h
+        include/UDPServer.h
+        include/TCPServer.h
         DESTINATION include/EMServers
 )
 

@@ -3,8 +3,8 @@
 #include <arpa/inet.h>
 #include <vector>
 
-#include "UDPServer.h"
-#include "TCPServer.h"
+#include "include/UDPServer.h"
+#include "include/TCPServer.h"
 
 UDPServer* serverPtr = nullptr;
 
