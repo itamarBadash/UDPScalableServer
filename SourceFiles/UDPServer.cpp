@@ -29,6 +29,16 @@ bool UDPServer::start() {
             return false;
         }
 
+        // Set socket timeout to make recvfrom non-blocking after a period
+        struct timeval timeout;
+        timeout.tv_sec = 1;  // 1-second timeout
+        timeout.tv_usec = 0;
+        if (setsockopt(socketFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+            std::cerr << "Error setting socket timeout: " << strerror(errno) << std::endl;
+            close(socketFd);
+            return false;
+        }
+
         sockaddr_in serverAddr{};
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_addr.s_addr = INADDR_ANY;
@@ -99,7 +109,6 @@ void UDPServer::stop() {
     }
 }
 
-
 void UDPServer::workerThreadFunction(int socketFd) {
     while (running) {
         sockaddr_in clientAddr{};
@@ -109,7 +118,10 @@ void UDPServer::workerThreadFunction(int socketFd) {
         int bytesReceived = recvfrom(socketFd, buffer.data(), buffer.size(), 0,
                                      (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (bytesReceived < 0) {
-            if (errno != EWOULDBLOCK && errno != EAGAIN) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                // Timeout occurred, check running flag and continue
+                continue;
+            } else if (errno != EINTR) {  // Ignore interrupts during shutdown
                 std::cerr << "Error receiving data: " << strerror(errno) << std::endl;
             }
             continue;
@@ -178,7 +190,7 @@ void UDPServer::workerThread() {
             std::unique_lock<std::mutex> lock(queueMutex);
             taskCondition.wait(lock, [this] { return bstop || !taskQueue.empty(); });
             if (bstop && taskQueue.empty()) {
-                return;
+                return;  // Exit the thread
             }
             task = std::move(taskQueue.front());
             taskQueue.pop();
