@@ -56,6 +56,8 @@ bool UDPServer::start() {
 
 void UDPServer::stop() {
     if (running) {
+        std::cout << "Stopping server..." << std::endl;
+
         running = false;
         {
             std::unique_lock<std::mutex> lock(queueMutex);
@@ -64,30 +66,39 @@ void UDPServer::stop() {
         queueCondition.notify_all();
         taskCondition.notify_all();
 
+        // Join worker threads
         for (auto& thread : threads) {
             if (thread.joinable()) {
+                std::cout << "Joining worker thread..." << std::endl;
                 thread.join();
             }
         }
 
+        if (commandProcessorThread.joinable()) {
+            std::cout << "Joining command processor thread..." << std::endl;
+            commandProcessorThread.join();
+        }
+
         for (auto& workerThread : workerThreads) {
             if (workerThread.joinable()) {
+                std::cout << "Joining task worker thread..." << std::endl;
                 workerThread.join();
             }
         }
 
         for (int socketFd : serverSockets) {
-            close(socketFd);
+            std::cout << "Shutting down and closing socket: " << socketFd << std::endl;
+            shutdown(socketFd, SHUT_RDWR);  // Interrupt any blocking recvfrom
+            close(socketFd);               // Close the socket
         }
-
-        if (commandProcessorThread.joinable()) {
-            commandProcessorThread.join();
-        }
-
         serverSockets.clear();
+
+        std::cout << "Server stopped." << std::endl;
+    } else {
+        std::cout << "Server is not running." << std::endl;
     }
-    std::cout << "Server stopped." << std::endl;
 }
+
 
 void UDPServer::workerThreadFunction(int socketFd) {
     while (running) {
