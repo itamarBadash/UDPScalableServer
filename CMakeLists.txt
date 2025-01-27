@@ -18,7 +18,7 @@ add_library(EMServers
 )
 
 # Include the current source directory for public headers
-target_include_directories(EMServers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(EMServers PUBLIC $<INSTALL_INTERFACE:include/EMServers> $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
 # Set library properties for shared builds
 if(BUILD_SHARED_LIBS)
