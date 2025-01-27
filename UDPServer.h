@@ -7,11 +7,25 @@
 #include <functional>
 #include <netinet/in.h>
 
-class UDPServer {
+// Export macro for symbol visibility
+#ifdef EM_SERVERS_EXPORTS
+#define EM_API __attribute__((visibility("default")))
+#else
+#define EM_API
+#endif
+
+class EM_API UDPServer {
 public:
     UDPServer(int port, int numSockets);
     ~UDPServer();
 
+    UDPServer(const UDPServer&) = delete;
+    UDPServer& operator=(const UDPServer&) = delete;
+
+    UDPServer(UDPServer&&) noexcept = default;
+    UDPServer& operator=(UDPServer&&) noexcept = default;
+
+    // Public API
     bool start();
     void stop();
     void registerCommandCallback(std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> callback);
@@ -19,27 +33,39 @@ public:
     void sendToAllClients(const std::vector<uint8_t>& message);
 
 private:
+    // Internal methods
     void workerThreadFunction(int socket);
     void processCommand();
     void enqueueTask(std::function<void()> task);
     void workerThread();
+    bool isClientRegistered(const sockaddr_in& clientAddr);
 
+    // Configuration
     int port;
     int numSockets;
+
+    // Resources
     std::vector<int> serverSockets;
     std::vector<std::thread> threads;
     std::vector<std::thread> workerThreads;
+    std::thread commandProcessorThread;
 
+    // State flags
     bool running;
-    std::mutex queueMutex;
+    bool bstop;
+
+    // Client data
+    std::vector<sockaddr_in> clients;
+
+    // Command and task queues
     std::queue<std::pair<std::vector<uint8_t>, sockaddr_in>> commandQueue;
     std::queue<std::function<void()>> taskQueue;
+
+    // Thread synchronization
+    std::mutex queueMutex;
     std::condition_variable queueCondition;
     std::condition_variable taskCondition;
-    std::thread commandProcessorThread;
-    bool isClientRegistered(const sockaddr_in& clientAddr);
-    bool bstop;
-    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
 
-    std::vector<sockaddr_in> clients;
+    // Callback
+    std::function<void(const std::vector<uint8_t>&, const sockaddr_in&)> commandCallback;
 };

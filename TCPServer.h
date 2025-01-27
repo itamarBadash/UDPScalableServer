@@ -10,10 +10,23 @@
 #include <atomic>
 #include <map>
 
-class TCPServer {
+// Export macro for symbol visibility
+#ifdef EM_SERVERS_EXPORTS
+#define EM_API __attribute__((visibility("default")))
+#else
+#define EM_API
+#endif
+
+class EM_API TCPServer {
 public:
     TCPServer(int port, int numSockets = 1);
     ~TCPServer();
+
+    TCPServer(const TCPServer&) = delete;
+    TCPServer& operator=(const TCPServer&) = delete;
+
+    TCPServer(TCPServer&&) noexcept = default;
+    TCPServer& operator=(TCPServer&&) noexcept = default;
 
     bool start();
     void stop();

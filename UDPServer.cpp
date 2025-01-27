@@ -113,7 +113,6 @@ void UDPServer::workerThreadFunction(int socketFd) {
             }
         }
 
-        // Add the message to the command queue
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             commandQueue.emplace(std::move(buffer), clientAddr);
