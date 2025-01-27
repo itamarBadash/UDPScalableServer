@@ -1,5 +1,7 @@
+# Minimum required CMake version
 cmake_minimum_required(VERSION 3.2)
 
+# Project name
 project(EMServers VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -25,9 +27,11 @@ if(BUILD_SHARED_LIBS)
     target_compile_definitions(EMServers PRIVATE EM_SERVERS_EXPORTS)
 endif()
 
+# Installation rules
 install(TARGETS EMServers
-        LIBRARY DESTINATION lib        # For shared libraries
-        ARCHIVE DESTINATION lib        # For static libraries
+        LIBRARY DESTINATION lib               # For shared libraries
+        ARCHIVE DESTINATION lib               # For static libraries
+        INCLUDES DESTINATION include/EMServers
 )
 
 install(FILES
@@ -35,3 +39,11 @@ install(FILES
         TCPServer.h
         DESTINATION include/EMServers
 )
+
+configure_file(EMServers.pc.in EMServers.pc @ONLY)
+install(FILES ${CMAKE_BINARY_DIR}/EMServers.pc DESTINATION lib/pkgconfig)
+
+install(CODE "
+    execute_process(COMMAND bash -c \"echo '/usr/local/lib' >> /etc/ld.so.conf.d/emservers.conf\")
+    execute_process(COMMAND ldconfig)
+")
