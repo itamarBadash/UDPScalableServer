@@ -1,0 +1,12 @@
+# EMServers configuration file
+
+# Set include directory and library paths
+set(EMServers_INCLUDE_DIR "@CMAKE_INSTALL_PREFIX@/include/EMServers")
+set(EMServers_LIBRARIES "@CMAKE_INSTALL_PREFIX@/lib/libEMServers.so")
+
+# Define an imported library target for EMServers
+add_library(EMServers::EMServers SHARED IMPORTED)
+set_target_properties(EMServers::EMServers PROPERTIES
+    IMPORTED_LOCATION ${EMServers_LIBRARIES}
+    INTERFACE_INCLUDE_DIRECTORIES ${EMServers_INCLUDE_DIR}
+)

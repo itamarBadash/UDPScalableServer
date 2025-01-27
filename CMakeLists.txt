@@ -43,18 +43,25 @@ install(FILES
         DESTINATION include/EMServers
 )
 
-# Generate and install the EMServersConfig.cmake file
+# Export the library targets to a targets file
 install(EXPORT EMServersTargets
         FILE EMServersTargets.cmake
-        NAMESPACE EMServers::
-        DESTINATION lib/cmake/EMServers
-)
+        NAMESPACE EMServers::                 # Namespace for find_package support
+        DESTINATION lib/cmake/EMServers)
 
+# Generate the EMServersConfig.cmake file from the .in template
 configure_file(
-        ${CMAKE_SOURCE_DIR}/EMServersConfig.cmake.in
-        ${CMAKE_BINARY_DIR}/EMServersConfig.cmake
+        ${CMAKE_SOURCE_DIR}/EMServersConfig.cmake.in   # Input template
+        ${CMAKE_BINARY_DIR}/EMServersConfig.cmake      # Output configuration
         @ONLY
 )
 
+# Install the generated EMServersConfig.cmake file
 install(FILES ${CMAKE_BINARY_DIR}/EMServersConfig.cmake
         DESTINATION lib/cmake/EMServers)
+
+# Ensure the library path is added to the linker configuration
+install(CODE "
+    execute_process(COMMAND bash -c \"echo '/usr/local/lib' >> /etc/ld.so.conf.d/emservers.conf\")
+    execute_process(COMMAND ldconfig)
+")
