@@ -40,7 +40,11 @@ install(FILES
         DESTINATION include/EMServers
 )
 
-configure_file(EMServers.pc.in EMServers.pc @ONLY)
+configure_file(
+        EMServers.pc.in
+        ${CMAKE_BINARY_DIR}/EMServers.pc
+        @ONLY
+)
 install(FILES ${CMAKE_BINARY_DIR}/EMServers.pc DESTINATION lib/pkgconfig)
 
 install(CODE "
