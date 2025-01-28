@@ -3,6 +3,8 @@
 #include <cstring>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <algorithm>
 
 TCPServer::TCPServer(int port, int numSockets)
         : port(port), numSockets(numSockets), running(false), bstop(false) {}
@@ -57,6 +59,8 @@ bool TCPServer::start() {
 
 void TCPServer::stop() {
     if (running) {
+        std::cout << "Stopping server..." << std::endl;
+
         running = false;
         {
             std::unique_lock<std::mutex> lock(queueMutex);
@@ -65,32 +69,52 @@ void TCPServer::stop() {
         queueCondition.notify_all();
         taskCondition.notify_all();
 
+        for (int socketFd : serverSockets) {
+            shutdown(socketFd, SHUT_RDWR);  // Interrupt accept
+            close(socketFd);
+        }
+
         for (auto& thread : listenerThreads) {
             if (thread.joinable()) {
                 thread.join();
             }
         }
 
-        for (int socketFd : serverSockets) {
-            close(socketFd);
-        }
-
         if (commandProcessorThread.joinable()) {
             commandProcessorThread.join();
         }
 
+        for (auto& thread : clientThreads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            for (int clientSocket : clientSockets) {
+                shutdown(clientSocket, SHUT_RDWR);
+                close(clientSocket);
+            }
+            clientSockets.clear();
+            clientAddresses.clear();
+        }
+
         serverSockets.clear();
+        std::cout << "Server stopped." << std::endl;
     }
-    std::cout << "Server stopped." << std::endl;
 }
 
 void TCPServer::workerThreadFunction(int serverSocket) {
     while (running) {
         sockaddr_in clientAddr{};
         socklen_t clientAddrLen = sizeof(clientAddr);
+
         int clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (clientSocket < 0) {
-            if (running) {
+            if (errno == EINTR) {
+                break;
+            } else if (running) {
                 std::cerr << "Error accepting connection: " << strerror(errno) << std::endl;
             }
             continue;
@@ -106,7 +130,6 @@ void TCPServer::workerThreadFunction(int serverSocket) {
             clientAddresses[clientSocket] = clientAddr; // Save client address
         }
 
-        // Start a new thread to handle this client
         clientThreads.emplace_back(&TCPServer::handleClient, this, clientSocket);
     }
 }
@@ -120,7 +143,6 @@ void TCPServer::handleClient(int clientSocket) {
         if (bytesReceived > 0) {
             buffer.resize(bytesReceived);
 
-            // Look up client address
             sockaddr_in clientAddr;
             {
                 std::lock_guard<std::mutex> lock(queueMutex);
@@ -135,16 +157,17 @@ void TCPServer::handleClient(int clientSocket) {
         } else if (bytesReceived == 0) {
             std::cout << "Client disconnected: socket " << clientSocket << std::endl;
             break; // Graceful disconnect
+        } else if (errno == EINTR) {
+            break; // Interrupted during shutdown
         } else {
             std::cerr << "Error receiving data from socket " << clientSocket
                       << ": " << strerror(errno) << std::endl;
-            break; // Error, close the connection
+            break;
         }
 
         buffer.resize(bufferSize); // Reset buffer size for the next read
     }
 
-    // Cleanup on disconnect
     close(clientSocket);
     {
         std::lock_guard<std::mutex> lock(queueMutex);
@@ -171,7 +194,6 @@ void TCPServer::processCommand() {
         }
     }
 }
-
 
 void TCPServer::enqueueTask(std::function<void()> task) {
     {
@@ -213,4 +235,3 @@ void TCPServer::sendToAllClients(const std::vector<uint8_t>& message) {
         }
     }
 }
-

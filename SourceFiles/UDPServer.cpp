@@ -29,7 +29,6 @@ bool UDPServer::start() {
             return false;
         }
 
-        // Set socket timeout to make recvfrom non-blocking after a period
         struct timeval timeout;
         timeout.tv_sec = 1;  // 1-second timeout
         timeout.tv_usec = 0;
