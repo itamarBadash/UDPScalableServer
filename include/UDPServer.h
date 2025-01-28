@@ -7,7 +7,6 @@
 #include <functional>
 #include <netinet/in.h>
 
-// Export macro for symbol visibility
 #ifdef EM_SERVERS_EXPORTS
 #define EM_API __attribute__((visibility("default")))
 #else
